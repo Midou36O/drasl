@@ -32,7 +32,6 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=latest
 
       - name: Verify OCI Image Creation
         run: |
