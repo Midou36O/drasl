@@ -2,12 +2,14 @@ package main
 
 import (
 	"errors"
-	"github.com/labstack/echo/v4"
-	"gorm.io/gorm"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 )
 
 type sessionJoinRequest struct {
@@ -51,14 +53,14 @@ func SessionJoinServer(app *App) func(c echo.Context) error {
 
 		// If any parameters are missing, return NO
 		if username == "" || sessionID == "" || serverID == "" {
-			return c.String(http.StatusMethodNotAllowed, "NO")
+			return c.String(http.StatusOK, "NO")
 		}
 
 		// Parse sessionId. It has the form:
 		// token:<accessToken>:<player UUID>
 		split := strings.Split(sessionID, ":")
 		if len(split) != 3 || split[0] != "token" {
-			return c.String(http.StatusMethodNotAllowed, "NO")
+			return c.String(http.StatusOK, "NO")
 		}
 		accessToken := split[1]
 		id := split[2]
@@ -66,23 +68,66 @@ func SessionJoinServer(app *App) func(c echo.Context) error {
 		// Is the accessToken valid?
 		client := app.GetClient(accessToken, StalePolicyDeny)
 		if client == nil {
-			return c.String(http.StatusMethodNotAllowed, "NO")
+
+			// If invalid, check the fallback servers
+			for _, fallbackAPIServer := range app.Config.FallbackAPIServers {
+				base, err := url.Parse(fallbackAPIServer.SessionURL)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				// replace string sessionserver.mojang.com with session.minecraft.net in the URL
+				if strings.Contains(base.Host, "sessionserver.mojang.com") {
+					base.Host = strings.ReplaceAll(base.Host, "sessionserver.mojang.com", "session.minecraft.net")
+				}
+
+				base.Path += "/game/joinserver.jsp"
+				params := url.Values{}
+				params.Add("user", username)
+				params.Add("sessionId", sessionID)
+				params.Add("serverId", serverID)
+				base.RawQuery = params.Encode()
+
+				// Print the URL query
+				log.Println("Fallback server query:", base.String())
+
+				res, err := MakeHTTPClient().Get(base.String())
+				if err != nil {
+					log.Printf("Received invalid response from fallback API server at %s\n", base.String())
+					continue
+				}
+				defer res.Body.Close()
+
+				// Check the body, if it contains "OK", return "OK"
+				// Otherwise, return an error message to the player.
+
+				body, err := io.ReadAll(res.Body) // Read the body
+				if err != nil {
+					return err
+				}
+
+				log.Println("Fallback server response:", res.StatusCode, string(body))
+
+				if res.StatusCode == http.StatusOK && string(body) == "OK" {
+					return c.String(http.StatusOK, "OK")
+				}
+			}
+			return c.String(http.StatusOK, "Invalid access token. Try restarting the game.")
 		}
 
 		// If the player name corresponding to the access token doesn't match
-		// the `user` param from the request, return NO
+		// the `user` param from the request, return an error message to the player.
 		user := client.User
 		if user.PlayerName != username {
-			return c.String(http.StatusMethodNotAllowed, "NO")
+			return c.String(http.StatusOK, "Username doesn't match. Try restarting the game or report to the admin.")
 		}
-		// If the player's UUID doesn't match the UUID in the sessionId, return
-		// NO
+		// If the player's UUID doesn't match the UUID in the sessionId, return an error message to the player.
 		userID, err := UUIDToID(user.UUID)
 		if err != nil {
 			return err
 		}
 		if userID != id {
-			return c.String(http.StatusMethodNotAllowed, "NO")
+			return c.String(http.StatusOK, "Invalid UUID. Try to reconnect, restart the game or report to the admin.")
 		}
 
 		user.ServerID = MakeNullString(&serverID)
@@ -91,7 +136,7 @@ func SessionJoinServer(app *App) func(c echo.Context) error {
 			return result.Error
 		}
 
-		return c.String(http.StatusOK, "YES")
+		return c.String(http.StatusOK, "OK")
 	}
 }
 
@@ -134,9 +179,24 @@ func (app *App) hasJoined(c *echo.Context, playerName string, serverID string, l
 				continue
 			}
 
-			base.Path += "/session/minecraft/hasJoined"
+			if legacy {
+				// Replace string sessionserver.mojang.com with session.minecraft.net in the URL
+				if strings.Contains(base.Host, "sessionserver.mojang.com") {
+					base.Host = strings.ReplaceAll(base.Host, "sessionserver.mojang.com", "session.minecraft.net")
+				}
+			}
+
+			if legacy {
+				base.Path += "/game/checkserver.jsp"
+			} else {
+				base.Path += "/session/minecraft/hasJoined"
+			}
 			params := url.Values{}
-			params.Add("username", playerName)
+			if legacy {
+				params.Add("user", playerName)
+			} else {
+				params.Add("username", playerName)
+			}
 			params.Add("serverId", serverID)
 			base.RawQuery = params.Encode()
 
@@ -157,7 +217,7 @@ func (app *App) hasJoined(c *echo.Context, playerName string, serverID string, l
 		}
 
 		if legacy {
-			return (*c).String(http.StatusMethodNotAllowed, "NO")
+			return (*c).String(http.StatusOK, "NO")
 		} else {
 			return (*c).NoContent(http.StatusForbidden)
 		}
