@@ -2,8 +2,8 @@ name: Publish OCI Image
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - "master"
 
 jobs:
   push_to_registry:
@@ -36,7 +36,7 @@ jobs:
       - name: Build and push OCI image
         env:
           REFERENCES: ${{ steps.meta.outputs.tags }}
-          YOUR_TOKEN: ${{ secrets.YOUR_TOKEN }}
+          YOUR_TOKEN: ${{ secrets.YOUR_TOKEN }} 
         run: |
           # Login to GHCR
           echo "$YOUR_TOKEN" | buildah login -u "$GITHUB_ACTOR" --password-stdin ghcr.io
