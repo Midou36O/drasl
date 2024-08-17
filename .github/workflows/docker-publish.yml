@@ -40,7 +40,8 @@ jobs:
         
         # Disable formatting of yamlfmt and prettier
         run: |
-          echo "$YOUR_TOKEN" | buildah login -u "${{github.actor}}" --password "$GITHUB_TOKEN" ghcr.io
+          buildah login -u "${{github.actor}}" --password "$GITHUB_TOKEN" ghcr.io
+          buildah manifest create drasl
           for system in 'x86_64-linux' 'aarch64-linux'; do 
           oci_archive="$(nix build --no-link --print-out-paths ".#oci-cross-$system")"
           buildah manifest add drasl "docker-archive:$oci_archive"
