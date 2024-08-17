@@ -14,7 +14,7 @@ jobs:
 
       - uses: cachix/install-nix-action@v20
         with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          github_access_token: ${{ secrets.YOUR_TOKEN }}
           extra_nix_config: |
             extra-platforms = aarch64-linux
 
@@ -41,7 +41,7 @@ jobs:
       - name: Build and Push OCI Image with Verbose Logging
         env: 
           REFERENCES: ${{ steps.meta.outputs.tags }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.YOUR_TOKEN }}
         run: |
           buildah --log-level debug login -u "${{ github.actor }}" --password "$GITHUB_TOKEN" ghcr.io
           buildah --log-level debug manifest create drasl
