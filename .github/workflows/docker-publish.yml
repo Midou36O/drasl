@@ -49,6 +49,6 @@ jobs:
 
           # Push the multi-arch image to GHCR
           for reference in $REFERENCES; do 
-            buildah manifest push --all -f v2s2 drasl "docker://ghcr.io/midou36o/drasl:$reference"
+            buildah manifest push --all -f v2s2 drasl "docker://ghcr.io/midou36o/drasl:latest"
           done
           echo "actually done!"
