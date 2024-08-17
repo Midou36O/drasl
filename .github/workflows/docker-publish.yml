@@ -32,26 +32,44 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=latest
 
-      - name: Debug OCI Files
+      - name: Verify OCI Image Creation
         run: |
-          find /nix/store -name "*.tar.gz" -print
-          ls -l /var/tmp/oci*
+          nix build --no-link --print-out-paths ".#oci-cross-x86_64-linux"
+          nix build --no-link --print-out-paths ".#oci-cross-aarch64-linux"
+
+      - name: Print OCI Archive Path
+        run: |
+          echo "$(nix build --no-link --print-out-paths ".#oci-cross-x86_64-linux")"
+          echo "$(nix build --no-link --print-out-paths ".#oci-cross-aarch64-linux")"
+
+      - name: Debug OCI Handling
+        run: |
+          for system in 'x86_64-linux' 'aarch64-linux'; do
+            oci_archive="$(nix build --no-link --print-out-paths ".#oci-cross-$system")"
+            echo "OCI Archive for $system: $oci_archive"
+            ls -l $oci_archive
+          done
 
       - name: Build and push OCI image
         env:
           REFERENCES: ${{ steps.meta.outputs.tags }}
           YOUR_TOKEN: ${{ secrets.YOUR_TOKEN }}
         run: |
-          echo "$YOUR_TOKEN" | buildah login -u "$GITHUB_ACTOR" --password-stdin ghcr.io
+          echo "$YOUR_TOKEN" | buildah login -u "${{ github.actor }}" --password-stdin ghcr.io
 
           buildah manifest create drasl
+          echo "Created manifest drasl"
 
           for system in 'x86_64-linux' 'aarch64-linux'; do
             oci_archive="$(nix build --no-link --print-out-paths ".#oci-cross-$system")"
             buildah manifest add drasl "oci-archive:$oci_archive"
+            echo "Added OCI archive for $system to manifest drasl"
           done
 
+          echo "Pushing manifest to GHCR"
           for reference in $REFERENCES; do
             buildah manifest push --all -f v2s2 drasl "docker://ghcr.io/midou36o/drasl:$reference"
+            echo "Pushed manifest for $reference"
           done
