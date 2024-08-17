@@ -64,6 +64,7 @@ type Config struct {
 	AllowMultipleAccessTokens  bool
 	AllowSkins                 bool
 	ApplicationOwner           string
+	ApplicationName            string
 	BaseURL                    string
 	BodyLimit                  bodyLimitConfig
 	DataDirectory              string
@@ -71,6 +72,7 @@ type Config struct {
 	DefaultPreferredLanguage   string
 	Domain                     string
 	EnableBackgroundEffect     bool
+	EnableFooter               bool
 	FallbackAPIServers         []FallbackAPIServer
 	ForwardSkins               bool
 	InstanceName               string
@@ -106,6 +108,7 @@ func DefaultConfig() Config {
 		AllowCapes:               true,
 		AllowChangingPlayerName:  true,
 		AllowSkins:               true,
+		ApplicationName:          "Drasl",
 		ApplicationOwner:         "Anonymous",
 		BaseURL:                  "",
 		BodyLimit:                defaultBodyLimitConfig,
@@ -114,6 +117,7 @@ func DefaultConfig() Config {
 		DefaultPreferredLanguage: "en",
 		Domain:                   "",
 		EnableBackgroundEffect:   true,
+		EnableFooter:             true,
 		ForwardSkins:             true,
 		InstanceName:             "Drasl",
 		ListenAddress:            "0.0.0.0:25585",

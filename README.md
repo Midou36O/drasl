@@ -66,6 +66,8 @@ See [doc/usage.md](doc/usage.md) for post-installation instructions and guidance
 
 ## API
 
+Drasl has its own API for managing users and invitations, but consider it in a beta state. v1 of this API is likely to be deprecated quickly. Documentation is [here](https://doc.drasl.unmojang.org).
+
 Drasl implements the Mojang API, documented here on [wiki.vg](https://wiki.vg):
 
 - [Mojang API](https://wiki.vg/Mojang_API)
@@ -75,8 +77,6 @@ Drasl implements the Mojang API, documented here on [wiki.vg](https://wiki.vg):
 If you find that an API route behaves substantively different than the Mojang API, please [file an issue](https://github.com/unmojang/drasl/issues).
 
 Drasl also implements (almost all of) the authlib-injector API at `/authlib-injector`, to the extent that it differs from Mojang's. The authlib-injector API is documented [here](https://github.com/yushijinhun/authlib-injector/wiki/Yggdrasil-%E6%9C%8D%E5%8A%A1%E7%AB%AF%E6%8A%80%E6%9C%AF%E8%A7%84%E8%8C%83) ([Google Translated to English](https://github-com.translate.goog/yushijinhun/authlib-injector/wiki/Yggdrasil-%E6%9C%8D%E5%8A%A1%E7%AB%AF%E6%8A%80%E6%9C%AF%E8%A7%84%E8%8C%83?_x_tr_sl=auto&_x_tr_tl=en&_x_tr_hl=en-US)).
-
-A Drasl API for creating and administering accounts is [planned](https://github.com/unmojang/drasl/issues/18).
 
 ## Building
 
@@ -88,6 +88,7 @@ Otherwise, install build dependencies. Go 1.19 or later is required:
 sudo apt install make golang gcc nodejs npm    # Debian
 sudo dnf install make go gcc nodejs npm        # Fedora
 sudo pacman -S make go gcc nodejs npm          # Arch Linux
+go install github.com/swaggo/swag/cmd/swag@latest
 ```
 
 Then build the program with:

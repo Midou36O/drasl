@@ -1,8 +1,13 @@
 prefix ?= /usr
 .DEFAULT_GOAL := build
 
-prebuild:
+npm-install:
 	npm install
+
+swag:
+	swag init --generalInfo api.go --output . --outputTypes json
+
+prebuild: npm-install swag
 	node esbuild.config.js
 
 build: prebuild
@@ -18,8 +23,9 @@ install: build
 	cp -R assets view public "$(prefix)/share/drasl/"
 
 clean:
-	rm drasl
-	rm -r public/* public/.*
+	rm -f drasl
+	rm -f swagger.json
+	rm -f public/bundle.js
 
 test: prebuild
 	go test
