@@ -33,24 +33,25 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
+      - name: Debug OCI Files
+        run: |
+          find /nix/store -name "*.tar.gz" -print
+          ls -l /var/tmp/oci*
+
       - name: Build and push OCI image
         env:
           REFERENCES: ${{ steps.meta.outputs.tags }}
-          YOUR_TOKEN: ${{ secrets.YOUR_TOKEN }} 
+          YOUR_TOKEN: ${{ secrets.YOUR_TOKEN }}
         run: |
-          # Login to GHCR
           echo "$YOUR_TOKEN" | buildah login -u "$GITHUB_ACTOR" --password-stdin ghcr.io
 
-          # Create a new manifest
           buildah manifest create drasl
 
-          # Add OCI images to the manifest
           for system in 'x86_64-linux' 'aarch64-linux'; do
             oci_archive="$(nix build --no-link --print-out-paths ".#oci-cross-$system")"
             buildah manifest add drasl "oci-archive:$oci_archive"
           done
 
-          # Push the manifest to GHCR
           for reference in $REFERENCES; do
             buildah manifest push --all -f v2s2 drasl "docker://ghcr.io/midou36o/drasl:$reference"
           done
