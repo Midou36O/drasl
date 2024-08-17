@@ -14,7 +14,7 @@ jobs:
 
       - uses: cachix/install-nix-action@v20
         with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          github_access_token: ${{ secrets.YOUR_TOKEN }}
           extra_nix_config: |
             extra-platforms = aarch64-linux
 
@@ -33,21 +33,20 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      - name: Build and push OCI image
-        env:
-          REFERENCES: ${{ steps.meta.outputs.tags }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: BuildandpushOCIimage
+        env: 
+          REFERENCES: ${{steps.meta.outputs.tags}}
+          GITHUB_TOKEN: ${{secrets.YOUR_TOKEN}}
+        
+        # Disable formatting of yamlfmt and prettier
         run: |
-          echo "$DOCKERHUB_TOKEN" | buildah login -u "$DOCKERHUB_USERNAME" --password-stdin docker.io
-
-          buildah manifest create drasl
-
-          for system in 'x86_64-linux' 'aarch64-linux'; do
-            oci_archive="$(nix build --no-link --print-out-paths ".#oci-cross-$system")"
-            buildah manifest add drasl "docker-archive:$oci_archive"
+          echo "$YOUR_TOKEN" | buildah login -u "$YOUR_USERNAME" --password-stdin ghcr.io
+          for
+          system in 'x86_64-linux' 'aarch64-linux'; do 
+          oci_archive="$(nixbuild--no-link--print-out-paths".#oci-cross-$system")"
+          buildah manifest add drasl "docker-archive:$oci_archive"
           done
-
-          for reference in $REFERENCES; do
-            buildah manifest push --all -f v2s2 drasl "docker://$reference"
+          # Push the multi-arch image to GHCR
+          for reference in $REFERENCES;do 
+          buildah manifest push --all -f v2s2 drasl "docker://ghcr.io/${{ github.repository }}/$reference"
           done
