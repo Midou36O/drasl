@@ -3,72 +3,37 @@ name: Publish OCI Image
 on:
   push:
     branches:
-      - "master"
+      - "master"  # Trigger on push to master branch
 
 jobs:
-  push_to_registry:
-    name: Push OCI image to GHCR
+  build_and_publish:
+    name: Build and Publish OCI Image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - uses: cachix/install-nix-action@v20
+      - name: Set up Nix
+        uses: cachix/install-nix-action@v20
         with:
           github_access_token: ${{ secrets.YOUR_TOKEN }}
           extra_nix_config: |
             extra-platforms = aarch64-linux
 
-      - run: |
+      - name: Install Dependencies
+        run: |
           DEBIAN_FRONTEND=noninteractive
-          sudo apt-get update -q -y && sudo apt-get install -q -y qemu-system-aarch64 qemu-efi binfmt-support qemu-user-static
+          sudo apt-get update -q -y && sudo apt-get install -q -y \
+            qemu-system-aarch64 qemu-efi binfmt-support qemu-user-static
 
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: ghcr.io/midou36o/drasl
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-
-      - name: Verify OCI Image Creation
+      - name: Build Docker Image
         run: |
-          nix build --no-link --print-out-paths ".#oci-cross-x86_64-linux"
-          nix build --no-link --print-out-paths ".#oci-cross-aarch64-linux"
+          docker build -t ghcr.io/midou36o/drasl:latest -f Dockerfile .
 
-      - name: Print OCI Archive Path
-        run: |
-          echo "$(nix build --no-link --print-out-paths ".#oci-cross-x86_64-linux")"
-          echo "$(nix build --no-link --print-out-paths ".#oci-cross-aarch64-linux")"
-
-      - name: Debug OCI Handling
-        run: |
-          for system in 'x86_64-linux' 'aarch64-linux'; do
-            oci_archive="$(nix build --no-link --print-out-paths ".#oci-cross-$system")"
-            echo "OCI Archive for $system: $oci_archive"
-            ls -l $oci_archive
-          done
-
-      - name: Build and push OCI image
+      - name: Log in to GitHub Container Registry
         env:
-          REFERENCES: ${{ steps.meta.outputs.tags }}
-          YOUR_TOKEN: ${{ secrets.YOUR_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.YOUR_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+
+      - name: Push Docker Image to GHCR
         run: |
-          echo "$YOUR_TOKEN" | buildah login -u "${{ github.actor }}" --password-stdin ghcr.io
-
-          buildah manifest create drasl
-          echo "Created manifest drasl"
-
-          for system in 'x86_64-linux' 'aarch64-linux'; do
-            oci_archive="$(nix build --no-link --print-out-paths ".#oci-cross-$system")"
-            buildah manifest add drasl "oci-archive:$oci_archive"
-            echo "Added OCI archive for $system to manifest drasl"
-          done
-
-          echo "Pushing manifest to GHCR"
-          for reference in $REFERENCES; do
-            buildah manifest push --all -f v2s2 drasl "docker://ghcr.io/midou36o/drasl:$reference"
-            echo "Pushed manifest for $reference"
-          done
+          docker push ghcr.io/midou36o/drasl:latest
