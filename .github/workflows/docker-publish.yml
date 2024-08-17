@@ -35,9 +35,10 @@ jobs:
             exit 1
           fi
 
-          # Import and tag the image with buildah
+          # Import the OCI image into Buildah
           buildah from scratch --name drasl-imported
-          buildah add drasl-imported "/nix/store/$oci_image_path" /
+          buildah add drasl-imported "/nix/store/$oci_image_path"
+          buildah config --label "version=latest" drasl-imported
           buildah tag drasl-imported ghcr.io/midou36o/drasl:latest
 
       - name: Login to GHCR
