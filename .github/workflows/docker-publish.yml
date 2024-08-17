@@ -1,52 +1,56 @@
-name: Publish Docker Image
+name: Publish OCI Image
 
 on:
   push:
-    branches:
-      - "master"
+    tags:
+      - "v*"
 
 jobs:
-  build:
+  push_to_registry:
+    name: Push OCI image to GHCR
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
       - uses: cachix/install-nix-action@v20
         with:
           github_access_token: ${{ secrets.YOUR_TOKEN }}
+          extra_nix_config: |
+            extra-platforms = aarch64-linux
 
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y buildah
+      - run: |
+          DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update -q -y && sudo apt-get install -q -y qemu-system-aarch64 qemu-efi binfmt-support qemu-user-static
 
-      - name: Build OCI image with Nix
-        run: |
-          # Build the OCI image
-          nix build .#oci
+      - uses: DeterminateSystems/magic-nix-cache-action@main
 
-          # Find the output path of the OCI image
-          oci_image_path=$(nix build --no-link --print-out-paths .#oci | grep -oP '(?<=/nix/store/)[^ ]+')
-          echo "OCI Image Path: /nix/store/$oci_image_path"
-
-          # Verify the image file exists
-          if [ ! -f "/nix/store/$oci_image_path" ]; then
-            echo "OCI image file does not exist."
-            exit 1
-          fi
-
-          # Import the OCI image into Buildah
-          buildah from --name drasl-imported oci-archive:/nix/store/$oci_image_path
-          buildah tag drasl-imported ghcr.io/midou36o/drasl:latest
-
-      - name: Login to GHCR
-        uses: docker/login-action@v2
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.YOUR_TOKEN }}
+          images: ghcr.io/midou36o/drasl
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
-      - name: Push Docker Image
+      - name: Build and push OCI image
+        env:
+          REFERENCES: ${{ steps.meta.outputs.tags }}
+          YOUR_TOKEN: ${{ secrets.YOUR_TOKEN }}
         run: |
-          # Push the image to GHCR
-          buildah push ghcr.io/midou36o/drasl:latest
+          # Login to GHCR
+          echo "$YOUR_TOKEN" | buildah login -u "$GITHUB_ACTOR" --password-stdin ghcr.io
+
+          # Create a new manifest
+          buildah manifest create drasl
+
+          # Add OCI images to the manifest
+          for system in 'x86_64-linux' 'aarch64-linux'; do
+            oci_archive="$(nix build --no-link --print-out-paths ".#oci-cross-$system")"
+            buildah manifest add drasl "oci-archive:$oci_archive"
+          done
+
+          # Push the manifest to GHCR
+          for reference in $REFERENCES; do
+            buildah manifest push --all -f v2s2 drasl "docker://ghcr.io/midou36o/drasl:$reference"
+          done
