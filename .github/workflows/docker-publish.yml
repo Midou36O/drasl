@@ -45,7 +45,9 @@ jobs:
           oci_archive="$(nix build --no-link --print-out-paths ".#oci-cross-$system")"
           buildah manifest add drasl "docker-archive:$oci_archive"
           done
+          echo "done!"
           # Push the multi-arch image to GHCR
           for reference in $REFERENCES;do 
           buildah manifest push --all -f v2s2 drasl "docker://ghcr.io/${{ github.repository }}/$reference"
           done
+          echo "actually done!"
