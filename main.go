@@ -7,21 +7,22 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/dgraph-io/ristretto"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
-	"golang.org/x/time/rate"
-	"gorm.io/gorm"
 	"image"
 	"image/png"
 	"log"
-	"lukechampine.com/blake3"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"regexp"
 	"sync"
+
+	"github.com/dgraph-io/ristretto"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"golang.org/x/time/rate"
+	"gorm.io/gorm"
+	"lukechampine.com/blake3"
 )
 
 var DEBUG = os.Getenv("DRASL_DEBUG") != ""
@@ -219,16 +220,22 @@ func (app *App) MakeServer() *echo.Echo {
 
 	// Session
 	sessionHasJoined := SessionHasJoined(app)
+	sessionCheckServer := SessionCheckServer(app)
 	sessionJoin := SessionJoin(app)
+	sessionJoinServer := SessionJoinServer(app)
 	sessionProfile := SessionProfile(app)
 	sessionBlockedServers := SessionBlockedServers(app)
 	e.GET("/session/minecraft/hasJoined", sessionHasJoined)
+	e.GET("/game/checkserver.jsp", sessionCheckServer)
 	e.POST("/session/minecraft/join", sessionJoin)
+	e.GET("/game/joinserver.jsp", sessionJoinServer)
 	e.GET("/session/minecraft/profile/:id", sessionProfile)
 	e.GET("/blockedservers", sessionBlockedServers)
 
 	e.GET("/session/session/minecraft/hasJoined", sessionHasJoined)
+	e.GET("/session/game/checkserver.jsp", sessionCheckServer)
 	e.POST("/session/session/minecraft/join", sessionJoin)
+	e.POST("/session/game/joinserver.jsp", sessionJoinServer)
 	e.GET("/session/session/minecraft/profile/:id", sessionProfile)
 	e.GET("/session/blockedservers", sessionBlockedServers)
 
