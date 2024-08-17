@@ -14,7 +14,7 @@ jobs:
 
       - uses: cachix/install-nix-action@v20
         with:
-          github_access_token: ${{ secrets.YOUR_TOKEN }}
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
           extra_nix_config: |
             extra-platforms = aarch64-linux
 
@@ -28,27 +28,32 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ghcr.io/midou36o/drasl  # Corrected image path for GHCR
+          images: ghcr.io/midou36o/drasl
           tags: |
+            type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=ref,event=branch
 
-      - name: Build and Push OCI Image
+      - name: Debug Tags
+        run: |
+          echo "Generated Tags: ${{ steps.meta.outputs.tags }}"
+
+      - name: Build and Push OCI Image with Verbose Logging
         env: 
           REFERENCES: ${{ steps.meta.outputs.tags }}
-          GITHUB_TOKEN: ${{ secrets.YOUR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          buildah login -u "${{ github.actor }}" --password "$GITHUB_TOKEN" ghcr.io
-          buildah manifest create drasl
+          buildah --log-level debug login -u "${{ github.actor }}" --password "$GITHUB_TOKEN" ghcr.io
+          buildah --log-level debug manifest create drasl
           for system in 'x86_64-linux' 'aarch64-linux'; do 
             oci_archive="$(nix build --no-link --print-out-paths ".#oci-cross-$system")"
-            buildah manifest add drasl "docker-archive:$oci_archive"
+            buildah --log-level debug manifest add drasl "docker-archive:$oci_archive"
           done
           echo "done!"
 
-          # Push the multi-arch image to GHCR
-          for reference in $REFERENCES; do 
-            buildah manifest push --all -f v2s2 drasl "docker://ghcr.io/midou36o/drasl:latest"
-          done
-          echo "actually done!"
+          # Debugging: Print the REFERENCES variable
+          echo "REFERENCES: $REFERENCES"
+          
+          # Push the multi-arch image to GHCR using the latest tag
+          buildah --log-level debug manifest push --all -f v2s2 drasl "docker://ghcr.io/midou36o/drasl:latest"
+          echo "Pushed as latest"
