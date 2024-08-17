@@ -42,7 +42,7 @@ jobs:
         run: |
           echo "$YOUR_TOKEN" | buildah login -u "${{github.actor}}" --password "$GITHUB_TOKEN" ghcr.io
           for system in 'x86_64-linux' 'aarch64-linux'; do 
-          oci_archive="$(nixbuild--no-link--print-out-paths".#oci-cross-$system")"
+          oci_archive="$(nix build --no-link --print-out-paths ".#oci-cross-$system")"
           buildah manifest add drasl "docker-archive:$oci_archive"
           done
           # Push the multi-arch image to GHCR
