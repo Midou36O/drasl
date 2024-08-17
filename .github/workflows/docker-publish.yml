@@ -50,6 +50,6 @@ jobs:
           echo "done!"
           # Push the multi-arch image to GHCR
           for reference in $REFERENCES;do 
-          buildah manifest push --all -f v2s2 drasl "ghcr.io/Midou36O/drasl:$reference"
+          buildah manifest push --all -f v2s2 drasl "ghcr.io/Midou36O/drasl/$reference"
           done
           echo "actually done!"
