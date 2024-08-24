@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -68,50 +67,6 @@ func SessionJoinServer(app *App) func(c echo.Context) error {
 		// Is the accessToken valid?
 		client := app.GetClient(accessToken, StalePolicyDeny)
 		if client == nil {
-
-			// If invalid, check the fallback servers
-			for _, fallbackAPIServer := range app.Config.FallbackAPIServers {
-				base, err := url.Parse(fallbackAPIServer.SessionURL)
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-				// replace string sessionserver.mojang.com with session.minecraft.net in the URL
-				if strings.Contains(base.Host, "sessionserver.mojang.com") {
-					base.Host = strings.ReplaceAll(base.Host, "sessionserver.mojang.com", "session.minecraft.net")
-				}
-
-				base.Path += "/game/joinserver.jsp"
-				params := url.Values{}
-				params.Add("user", username)
-				params.Add("sessionId", sessionID)
-				params.Add("serverId", serverID)
-				base.RawQuery = params.Encode()
-
-				// Print the URL query
-				log.Println("Fallback server query:", base.String())
-
-				res, err := MakeHTTPClient().Get(base.String())
-				if err != nil {
-					log.Printf("Received invalid response from fallback API server at %s\n", base.String())
-					continue
-				}
-				defer res.Body.Close()
-
-				// Check the body, if it contains "OK", return "OK"
-				// Otherwise, return an error message to the player.
-
-				body, err := io.ReadAll(res.Body) // Read the body
-				if err != nil {
-					return err
-				}
-
-				log.Println("Fallback server response:", res.StatusCode, string(body))
-
-				if res.StatusCode == http.StatusOK && string(body) == "OK" {
-					return c.String(http.StatusOK, "OK")
-				}
-			}
 			return c.String(http.StatusOK, "Invalid access token. Try restarting the game.")
 		}
 
