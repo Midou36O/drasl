@@ -3,7 +3,7 @@ name: Publish OCI Image
 on:
   push:
     branches:
-      - "master"
+      - "**"
 
 jobs:
   build_and_publish:
@@ -27,7 +27,8 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          docker build -t ghcr.io/midou36o/drasl:latest -f Dockerfile .
+          BRANCH_NAME=$(echo "${GITHUB_REF#refs/heads/}")
+          docker build -t ghcr.io/midou36o/drasl:$BRANCH_NAME -f Dockerfile .
           docker images  # List images to verify
 
       - name: Log in to GitHub Container Registry
@@ -37,5 +38,6 @@ jobs:
 
       - name: Push Docker Image to GHCR
         run: |
-          docker push ghcr.io/midou36o/drasl:latest
+          BRANCH_NAME=$(echo "${GITHUB_REF#refs/heads/}")
+          docker push ghcr.io/midou36o/drasl:$BRANCH_NAME
           docker images
