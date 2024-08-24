@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 )
@@ -214,16 +215,22 @@ func SessionCheckServer(app *App) func(c echo.Context) error {
 func SessionProfile(app *App) func(c echo.Context) error {
 	return func(c echo.Context) error {
 		id := c.Param("id")
-		uuid, err := IDToUUID(id)
+
+		var uuid_ string
+		uuid_, err := IDToUUID(id)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, ErrorResponse{
-				ErrorMessage: Ptr("Not a valid UUID: " + c.Param("id")),
-			})
+			_, err = uuid.Parse(id)
+			if err != nil {
+				return c.JSON(http.StatusBadRequest, ErrorResponse{
+					ErrorMessage: Ptr("Not a valid UUID: " + c.Param("id")),
+				})
+			}
+			uuid_ = id
 		}
 
 		findUser := func() (*User, error) {
 			var user User
-			result := app.DB.First(&user, "uuid = ?", uuid)
+			result := app.DB.First(&user, "uuid = ?", uuid_)
 			if result.Error == nil {
 				return &user, nil
 			}
@@ -233,7 +240,7 @@ func SessionProfile(app *App) func(c echo.Context) error {
 
 			// Could be an offline UUID
 			if app.Config.OfflineSkins {
-				result = app.DB.First(&user, "offline_uuid = ?", uuid)
+				result = app.DB.First(&user, "offline_uuid = ?", uuid_)
 				if result.Error == nil {
 					return &user, nil
 				}
@@ -271,7 +278,7 @@ func SessionProfile(app *App) func(c echo.Context) error {
 		}
 
 		sign := c.QueryParam("unsigned") == "false"
-		profile, err := fullProfile(app, user, uuid, sign)
+		profile, err := fullProfile(app, user, uuid_, sign)
 		if err != nil {
 			return err
 		}
