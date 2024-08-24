@@ -52,6 +52,7 @@ type App struct {
 	KeyB3Sum512              []byte
 	SkinMutex                *sync.Mutex
 	VerificationSkinTemplate *image.NRGBA
+	ProofStr                 int64
 }
 
 func (app *App) LogError(err error, c *echo.Context) {
@@ -158,6 +159,7 @@ func (app *App) MakeServer() *echo.Echo {
 	e.POST("/web/logout", FrontLogout(app))
 	e.POST("/web/register", FrontRegister(app))
 	e.POST("/web/update", FrontUpdate(app))
+	e.POST("/web/poll-login", PollHandle(app))
 	e.Static("/web/public", path.Join(app.Config.DataDirectory, "public"))
 	e.Static("/web/texture/cape", path.Join(app.Config.StateDirectory, "cape"))
 	e.Static("/web/texture/skin", path.Join(app.Config.StateDirectory, "skin"))

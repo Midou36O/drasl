@@ -37,6 +37,7 @@
     When you are done, enter a password for your {{ .App.Config.ApplicationName }} account and hit
     "Register".
   </p>
+
   <form action="{{ .App.FrontEndURL }}/web/register" method="post">
     <input
       type="text"
@@ -52,6 +53,26 @@
     <input hidden name="returnUrl" value="{{ .URL }}" />
     <input type="submit" value="Register" />
   </form>
+
+  <p> Or if you have a valid (non Xbox Game Pass) Minecraft account, please go here: <a href="{{ .MSURL }}">Login with microsoft</a></p>
+  <p> Then press the "Register" button to verify your account</p>
+  <p> You may not notice anything on the webpage, this is normal, just wait after signing up! (1 minute to login after pressing the button is given after pressing the "Register button")</p>
+  <p> Due to limitations, a successful registration will not login you automatically, you will have to login manually after registration</p>
+
+  <form action="/web/poll-login" method="post">
+      <p>
+          <input
+            type="text"
+            name="username"
+            value="{{ .Username }}"
+            required
+            hidden
+          />
+          <input type="password" name="password" placeholder="Password" required />
+          <input type="submit" value="Register">
+      </p>
+  </form>
+
 
   {{ template "footer" . }}
 {{ end }}

@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/BurntSushi/toml v1.3.2
 	github.com/dgraph-io/ristretto v0.1.1
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/golang-jwt/jwt/v5 v5.1.0
 	github.com/google/uuid v1.4.0
 	github.com/jxskiss/base62 v1.1.0

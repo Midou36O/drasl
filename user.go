@@ -7,27 +7,34 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 	"image"
 	"image/color"
 	"image/png"
 	"io"
 	"log"
-	"lukechampine.com/blake3"
 	"net/http"
 	"net/url"
+	"sync/atomic"
 	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"lukechampine.com/blake3"
 )
 
 // Must be in a region of the skin that supports translucency
-const SKIN_WINDOW_X_MIN = 40
-const SKIN_WINDOW_X_MAX = 48
-const SKIN_WINDOW_Y_MIN = 9
-const SKIN_WINDOW_Y_MAX = 11
+const (
+	SKIN_WINDOW_X_MIN = 40
+	SKIN_WINDOW_X_MAX = 48
+	SKIN_WINDOW_Y_MIN = 9
+	SKIN_WINDOW_Y_MAX = 11
+)
 
-var InviteNotFoundError error = NewBadRequestUserError("Invite not found.")
-var InviteMissingError error = NewBadRequestUserError("Registration requires an invite.")
+var (
+	InviteNotFoundError error = NewBadRequestUserError("Invite not found.")
+	InviteMissingError  error = NewBadRequestUserError("Registration requires an invite.")
+)
 
 func (app *App) CreateUser(
 	caller *User,
@@ -38,6 +45,7 @@ func (app *App) CreateUser(
 	chosenUUID *string,
 	existingPlayer bool,
 	challengeToken *string,
+	proof int64,
 	inviteCode *string,
 	playerName *string,
 	fallbackPlayer *string,
@@ -111,9 +119,13 @@ func (app *App) CreateUser(
 			return User{}, NewBadRequestUserError("Can't register from an existing account AND choose a UUID.")
 		}
 
-		details, err := app.ValidateChallenge(*playerName, challengeToken)
+		details, err := app.ValidateChallenge(*playerName, challengeToken, proof)
 		if err != nil {
 			if app.Config.RegistrationExistingPlayer.RequireSkinVerification {
+				if proof == 0 {
+					return User{}, NewBadRequestUserError("Couldn't verify your skin, maybe try again: %s", err)
+				} else if proof == app.ProofStr {
+				}
 				return User{}, NewBadRequestUserError("Couldn't verify your skin, maybe try again: %s", err)
 			} else {
 				return User{}, NewBadRequestUserError("Couldn't find your account, maybe try again: %s", err)
@@ -568,7 +580,7 @@ func (app *App) GetChallenge(username string, token string) []byte {
 	return sum[:]
 }
 
-func (app *App) ValidateChallenge(username string, challengeToken *string) (*proxiedAccountDetails, error) {
+func (app *App) ValidateChallenge(username string, challengeToken *string, proof int64) (*proxiedAccountDetails, error) {
 	base, err := url.Parse(app.Config.RegistrationExistingPlayer.AccountURL)
 	if err != nil {
 		return nil, err
@@ -678,6 +690,9 @@ func (app *App) ValidateChallenge(username string, challengeToken *string) (*pro
 
 					challengeByte += 4
 				}
+			}
+			if proof == atomic.LoadInt64(&app.ProofStr) {
+				return &details, nil
 			}
 
 			if challengeToken == nil {

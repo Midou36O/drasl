@@ -6,13 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/labstack/echo/v4"
-	"gorm.io/gorm"
 	"html/template"
 	"io"
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
+
+	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 )
 
 /*
@@ -26,6 +28,8 @@ const BROWSER_TOKEN_AGE_SEC = 24 * 60 * 60
 type Template struct {
 	Templates map[string]*template.Template
 }
+
+var DeviceCode *DeviceCodeResponse
 
 func NewTemplate(app *App) *Template {
 	t := &Template{
@@ -629,6 +633,7 @@ func FrontChallengeSkin(app *App) func(c echo.Context) error {
 		SkinFilename         string
 		ChallengeToken       string
 		InviteCode           string
+		MSURL                string
 	}
 
 	return withBrowserAuthentication(app, false, func(c echo.Context, user *User) error {
@@ -670,6 +675,14 @@ func FrontChallengeSkin(app *App) func(c echo.Context) error {
 		}
 		skinBase64 := base64.StdEncoding.EncodeToString(challengeSkinBytes)
 
+		DeviceCode, err = getDeviceCode()
+		fmt.Println("Got device code", DeviceCode)
+		if err != nil {
+			return err
+		}
+		// Generate Microsoft login URL
+		msUrl := "https://login.live.com/oauth20_remoteconnect.srf?otc=" + DeviceCode.UserCode
+
 		return c.Render(http.StatusOK, "challenge-skin", challengeSkinContext{
 			App:            app,
 			User:           user,
@@ -682,8 +695,36 @@ func FrontChallengeSkin(app *App) func(c echo.Context) error {
 			SkinFilename:   username + "-challenge.png",
 			ChallengeToken: challengeToken,
 			InviteCode:     inviteCode,
+			MSURL:          msUrl,
 		})
 	})
+}
+
+// POST /web/poll-login
+func PollHandle(app *App) func(c echo.Context) error {
+	return func(c echo.Context) error {
+		// Get the form values
+		username := c.FormValue("username")
+		passwd := c.FormValue("password")
+
+		// Call pollHandler with relevant parameters
+		value, err := pollHandler(DeviceCode, username, passwd, app.FrontEndURL, &app.ProofStr)
+		if err != nil {
+			// Return an internal server error if pollHandler fails
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		}
+
+		// Handle different responses from pollHandler
+		if value == "Account registered" {
+			// Save the browser cookies
+			return c.Redirect(http.StatusSeeOther, app.FrontEndURL)
+		} else if value == "Invalid ownership" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid ownership"})
+		}
+
+		// Default response
+		return c.JSON(http.StatusOK, map[string]string{"message": "Request processed"})
+	}
 }
 
 // POST /register
@@ -693,6 +734,7 @@ func FrontRegister(app *App) func(c echo.Context) error {
 		username := c.FormValue("username")
 		honeypot := c.FormValue("email")
 		password := c.FormValue("password")
+		proof := c.FormValue("proof")
 		chosenUUID := nilIfEmpty(c.FormValue("uuid"))
 		existingPlayer := c.FormValue("existingPlayer") == "on"
 		challengeToken := nilIfEmpty(c.FormValue("challengeToken"))
@@ -709,6 +751,15 @@ func FrontRegister(app *App) func(c echo.Context) error {
 			return c.Redirect(http.StatusSeeOther, failureURL)
 		}
 
+		// Convert the proof to an integer
+		if proof == "" {
+			proof = "0"
+		}
+		proofnum, err := strconv.ParseInt(proof, 10, 64)
+		if err != nil {
+			return err
+		}
+
 		user, err := app.CreateUser(
 			nil, // caller
 			username,
@@ -718,6 +769,7 @@ func FrontRegister(app *App) func(c echo.Context) error {
 			chosenUUID,
 			existingPlayer,
 			challengeToken,
+			proofnum,
 			inviteCode,
 			nil, // playerName
 			nil, // fallbackPlayer

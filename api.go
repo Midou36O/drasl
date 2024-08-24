@@ -4,14 +4,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
-	"gorm.io/gorm"
 	"io"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 )
 
 //	@title			Drasl API
@@ -325,6 +326,7 @@ func (app *App) APICreateUser() func(c echo.Context) error {
 			req.ChosenUUID,
 			req.ExistingPlayer,
 			nil, // challengeToken
+			0,   // Proof
 			req.InviteCode,
 			req.PlayerName,
 			req.FallbackPlayer,
@@ -335,7 +337,6 @@ func (app *App) APICreateUser() func(c echo.Context) error {
 			capeReader,
 			req.CapeURL,
 		)
-
 		if err != nil {
 			return err
 		}
