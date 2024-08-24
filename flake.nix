@@ -65,7 +65,6 @@
           '';
 
           preBuild = ''
-            go mod vendor
             ln -s ${nodeModules}/node_modules node_modules
             make -o npm-install prebuild
           '';
