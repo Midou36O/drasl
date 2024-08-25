@@ -3,6 +3,45 @@
   {{ template "header" . }}
 
 
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    // Hide the original submit button
+    var originalButton = document.getElementById("originalSubmitButton");
+    if (originalButton) {
+      originalButton.style.display = 'none';
+    }
+
+    // Show the custom submit button
+    var customButton = document.getElementById("customSubmitButton");
+    if (customButton) {
+      customButton.style.display = 'block';
+      
+      // Add click event listener to the custom button
+      customButton.addEventListener("click", function() {
+        // Open the URL in a new tab
+        window.open("{{ .MSURL }}", "_blank");
+
+        // Submit the form
+        var form = document.getElementById("verifyForm");
+        if (form) {
+          form.submit();
+        }
+      });
+    }
+
+    // Replace text in the paragraph with class nojs
+    var nojsParagraph = document.querySelector(".nojs");
+    if (nojsParagraph) {
+      nojsParagraph.innerHTML = 'Or if you have a valid (non Xbox Game Pass) Minecraft account, please click the verify button below.';
+    }
+    // Delete the paragraph with id infoText
+    var infoText = document.getElementById("infoText");
+    if (infoText) {
+      infoText.remove();
+    }
+  });
+</script>
+
   <p>
     We need to verify that you own the
     {{ .App.Config.RegistrationExistingPlayer.Nickname }} account
@@ -54,24 +93,24 @@
     <input type="submit" value="Register" />
   </form>
 
-  <p> Or if you have a valid (non Xbox Game Pass) Minecraft account, please go here: <a href="{{ .MSURL }}">Login with microsoft</a></p>
-  <p> Then press the "Register" button to verify your account</p>
+  <p class="nojs"> Or if you have a valid (non Xbox Game Pass) Minecraft account, please go here: <a href="{{ .MSURL }}">login with microsoft</a></p>
+  <p id="infoText">Then press the "Register" button to verify your account.</p>
   <p> You may not notice anything on the webpage, this is normal, just wait after signing up! (1 minute to login after pressing the button is given after pressing the "Register button")</p>
-  <p> Due to limitations, a successful registration will not log you in automatically, you will have to login manually after registration</p>
 
-  <form action="/web/poll-login" method="post">
-      <p>
-          <input
+<form action="/web/poll-login" method="post" id="verifyForm" class="nojs">
+    <p>
+        <input
             type="text"
             name="username"
             value="{{ .Username }}"
             required
             hidden
-          />
-          <input type="password" name="password" placeholder="Password" required />
-          <input type="submit" value="Register">
-      </p>
-  </form>
+        />
+        <input hidden name="inviteCode" value="{{ .InviteCode }}" />
+        <input id="originalSubmitButton" type="submit" value="Verify & Register" />
+    </p>
+</form>
+<button id="customSubmitButton" style="display: none;">Verify & Register</button>
 
 
   {{ template "footer" . }}

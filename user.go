@@ -692,6 +692,8 @@ func (app *App) ValidateChallenge(username string, challengeToken *string, proof
 				}
 			}
 			if proof == atomic.LoadInt64(&app.ProofStr) {
+				// reset proof
+				atomic.StoreInt64(&app.ProofStr, 0)
 				return &details, nil
 			}
 

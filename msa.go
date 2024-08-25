@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"net/url"
@@ -26,6 +25,11 @@ type DeviceCodeResponse struct {
 	VerificationURL string `json:"verification_uri"`
 	ExpiresIn       int    `json:"expires_in"`
 	Interval        int    `json:"interval"`
+}
+
+type RegistrationResponse struct {
+	Username string
+	Proof    int64
 }
 
 type AccessTokenResponse struct {
@@ -100,25 +104,6 @@ type GameOwnershipResponse struct {
 var (
 	deviceCode *DeviceCodeResponse
 	mutex      sync.Mutex
-	tmpl       = template.Must(template.New("login").Parse(`
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Login</title>
-</head>
-<body>
-    <h1>Microsoft OAuth Login</h1>
-    <p>Please open the following URL in a new tab or window to start the login process:</p>
-    <form action="/poll" method="post">
-        <p>
-            <a href="{{.URL}}" target="_blank">Open OAuth URL</a>
-            <br><br>
-            <input type="submit" value="Poll for Authentication Token">
-        </p>
-    </form>
-</body>
-</html>
-`))
 )
 
 func getDeviceCode() (*DeviceCodeResponse, error) {
@@ -317,95 +302,75 @@ func checkGameOwnership(accessToken string) (*GameOwnershipResponse, error) {
 	return &ownershipResponse, nil
 }
 
-func loginHandler(w http.ResponseWriter) {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	var err error
-	deviceCode, err = getDeviceCode()
-	if err != nil {
-		log.Fatalf("Failed to get device code: %v", err)
-	}
-
-	otcURL := fmt.Sprintf("https://login.live.com/oauth20_remoteconnect.srf?otc=%s", deviceCode.UserCode)
-
-	data := struct {
-		URL string
-	}{
-		URL: otcURL,
-	}
-
-	tmpl.Execute(w, data)
-}
-
-func pollHandler(deviceCode *DeviceCodeResponse, usr string, passwd string, baseurl string, proofStr *int64) (string, error) {
+func pollHandler(deviceCode *DeviceCodeResponse, usr string, proofStr *int64) (string, RegistrationResponse, error) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
 	if deviceCode == nil {
-		return "", fmt.Errorf("Device code not found. Please start the login process again.")
+		return "", RegistrationResponse{}, fmt.Errorf("Device code not found. Please start the login process again.")
 	}
 
 	// Get the access token using the device code
 	tokenResponse, err := getAuthToken(deviceCode)
 	if err != nil {
 		log.Printf("Failed to get auth token: %v", err)
-		return "", fmt.Errorf("Failed to get auth token.")
+		return "", RegistrationResponse{}, fmt.Errorf("Failed to get auth token.")
 	}
 
 	// Authenticate with Xbox Live using the access token
 	xboxLiveResponse, err := authenticateWithXboxLive(tokenResponse.AccessToken)
 	if err != nil {
 		log.Printf("Failed to authenticate with Xbox Live: %v", err)
-		return "", fmt.Errorf("Failed to authenticate with Xbox Live.")
+		return "", RegistrationResponse{}, fmt.Errorf("Failed to authenticate with Xbox Live.")
 	}
 
 	// Obtain XSTS token using the Xbox Live token
 	xstsResponse, err := getXSTSToken(xboxLiveResponse.Token)
 	if err != nil {
 		log.Printf("Failed to obtain XSTS token: %v", err)
-		return "", fmt.Errorf("Failed to obtain XSTS token.")
+		return "", RegistrationResponse{}, fmt.Errorf("Failed to obtain XSTS token.")
 	}
 
 	// Authenticate with Minecraft using the XSTS token and Xbox user hash
 	minecraftAuthResponse, err := authenticateWithMinecraft(xstsResponse.DisplayClaims.Xui[0].Uhs, xstsResponse.Token)
 	if err != nil {
 		log.Printf("Failed to authenticate with Minecraft: %v", err)
-		return "", fmt.Errorf("Failed to authenticate with Minecraft.")
+		return "", RegistrationResponse{}, fmt.Errorf("Failed to authenticate with Minecraft.")
 	}
 	minecraftAccessToken := minecraftAuthResponse.AccessToken
 
 	// Check game ownership
 	ownershipResponse, err := checkGameOwnership(minecraftAccessToken)
 	if err != nil {
-		return "", fmt.Errorf("Failed to check game ownership: %v", err)
+		return "", RegistrationResponse{}, fmt.Errorf("Failed to check game ownership: %v", err)
 	}
+
 	// Convert the minecraftAccessToken to a string (if it's not already a string)
 	stringcraft := fmt.Sprintf("%s", minecraftAccessToken)
 
 	// Split the JWT token into its parts
 	jwtParts := strings.Split(stringcraft, ".")
 	if len(jwtParts) < 2 {
-		return "", fmt.Errorf("Invalid JWT token format")
+		return "", RegistrationResponse{}, fmt.Errorf("Invalid JWT token format")
 	}
 
 	payload := jwtParts[1]
 	decoded, err := base64.RawStdEncoding.DecodeString(payload)
 	if err != nil {
-		return "", fmt.Errorf("Failed to decode JWT token: %v", err)
+		return "", RegistrationResponse{}, fmt.Errorf("Failed to decode JWT token: %v", err)
 	}
 
 	// JSON unmarshal the decoded JWT token into a map
 	var decodedToken map[string]interface{}
 	err = json.Unmarshal(decoded, &decodedToken)
 	if err != nil {
-		return "", fmt.Errorf("Failed to unmarshal decoded JWT token: %v", err)
+		return "", RegistrationResponse{}, fmt.Errorf("Failed to unmarshal decoded JWT token: %v", err)
 	}
 
 	// Attempt to retrieve the "profiles" key from the decoded token
 	profiles, ok := decodedToken["profiles"]
 	if !ok {
-		return "", fmt.Errorf("No profiles field found in JWT token")
+		return "", RegistrationResponse{}, fmt.Errorf("No profiles field found in JWT token")
 	}
 
 	// Handle different possible types for the "profiles" field
@@ -415,55 +380,51 @@ func pollHandler(deviceCode *DeviceCodeResponse, usr string, passwd string, base
 		if mcProfile, ok := profiles["mc"].(string); ok {
 			uuid = mcProfile
 		} else {
-			return "", fmt.Errorf("mc profile not found or is not a string")
+			return "", RegistrationResponse{}, fmt.Errorf("mc profile not found or is not a string")
 		}
 	case string:
 		uuid = profiles // if the profiles field is directly the UUID string
 	default:
-		return "", fmt.Errorf("Unexpected type for profiles field")
+		return "", RegistrationResponse{}, fmt.Errorf("Unexpected type for profiles field")
 	}
 
-	// remove the "-" from the UUID
+	// Remove the "-" from the UUID
 	uuid = strings.ReplaceAll(uuid, "-", "")
 
-	// Check if the UUID is the same as the username's UUID (pull from mojang API))
-
-	// GET https://api.mojang.com/users/profiles/minecraft/<username>
-
-	// Prepare the request
+	// Prepare the request to Mojang API
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.mojang.com/users/profiles/minecraft/%s", usr), nil)
 	if err != nil {
-		return "", fmt.Errorf("Failed to create request: %v", err)
+		return "", RegistrationResponse{}, fmt.Errorf("Failed to create request: %v", err)
 	}
 
 	// Send the request
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("Failed to send request: %v", err)
+		return "", RegistrationResponse{}, fmt.Errorf("Failed to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	// Check for HTTP errors
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Request failed with status: %s", resp.Status)
+		return "", RegistrationResponse{}, fmt.Errorf("Request failed with status: %s", resp.Status)
 	}
 
 	// Decode the response
 	var user map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
-		return "", fmt.Errorf("Failed to decode response: %v", err)
+		return "", RegistrationResponse{}, fmt.Errorf("Failed to decode response: %v", err)
 	}
 
 	// Extract the UUID from the response
 	userUUID, ok := user["id"].(string)
 	if !ok {
-		return "", fmt.Errorf("UUID not found or is not a string")
+		return "", RegistrationResponse{}, fmt.Errorf("UUID not found or is not a string")
 	}
 
 	// Compare the UUIDs
 	if uuid != userUUID {
-		return "", fmt.Errorf("UUIDs do not match, impersonating someone is not nice!")
+		return "", RegistrationResponse{}, fmt.Errorf("UUIDs do not match, impersonating someone is not nice!")
 	}
 
 	// Determine if the game is owned
@@ -480,35 +441,15 @@ func pollHandler(deviceCode *DeviceCodeResponse, usr string, passwd string, base
 		// Generate a single-use token for the registration.
 		atomic.StoreInt64(proofStr, time.Now().UnixNano())
 
-		proof := fmt.Sprintf("%d", atomic.LoadInt64(proofStr))
+		proof := atomic.LoadInt64(proofStr)
 
-		// Prepare your data for the POST request
-		data := url.Values{}
-		data.Set("username", usr)
-		data.Set("password", passwd)
-		data.Set("returnUrl", baseurl)
-		data.Set("proof", proof)
-		data.Set("existingPlayer", "on")
-
-		// Create the POST request
-		url := fmt.Sprintf("%s/web/register", baseurl)
-		resp, err := http.Post(url, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
-		if err != nil {
-			log.Fatalf("An error occurred while sending the request: %v", err)
+		// Build the RegistrationResponse struct
+		registrationResponse := RegistrationResponse{
+			Username: usr,
+			Proof:    proof,
 		}
-		defer resp.Body.Close()
-
-		// Handle the cookie returned by the server
-		cookie := resp.Cookies()
-		for _, c := range cookie {
-			if c.Name == "browserToken" {
-				// Print the cookie value for debugging
-				fmt.Printf("Received browserToken cookie: %s\n", c.Value)
-				break
-			}
-		}
-		return "Account registered", nil
+		return "Account registered", registrationResponse, nil
 	} else {
-		return "Invalid ownership", nil
+		return "Invalid ownership", RegistrationResponse{}, nil
 	}
 }

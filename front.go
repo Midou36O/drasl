@@ -43,6 +43,7 @@ func NewTemplate(app *App) *Template {
 		"profile",
 		"registration",
 		"challenge-skin",
+		"registration-success",
 		"admin",
 	}
 
@@ -676,7 +677,6 @@ func FrontChallengeSkin(app *App) func(c echo.Context) error {
 		skinBase64 := base64.StdEncoding.EncodeToString(challengeSkinBytes)
 
 		DeviceCode, err = getDeviceCode()
-		fmt.Println("Got device code", DeviceCode)
 		if err != nil {
 			return err
 		}
@@ -702,13 +702,27 @@ func FrontChallengeSkin(app *App) func(c echo.Context) error {
 
 // POST /web/poll-login
 func PollHandle(app *App) func(c echo.Context) error {
-	return func(c echo.Context) error {
+	type RegistrationInfo struct {
+		App            *App
+		User           *User
+		URL            string
+		SuccessMessage string
+		WarningMessage string
+		ErrorMessage   string
+		Username       string
+		Proof          int64
+		InviteCode     string
+	}
+	return withBrowserAuthentication(app, false, func(c echo.Context, user *User) error {
+		// return func(c echo.Context, user *User) error {
 		// Get the form values
 		username := c.FormValue("username")
-		passwd := c.FormValue("password")
+		invitecode := c.FormValue("inviteCode")
+
+		app.ProofStr = 0 // Initialize proofStr
 
 		// Call pollHandler with relevant parameters
-		value, err := pollHandler(DeviceCode, username, passwd, app.FrontEndURL, &app.ProofStr)
+		value, result, err := pollHandler(DeviceCode, username, &app.ProofStr)
 		if err != nil {
 			// Return an internal server error if pollHandler fails
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -716,15 +730,28 @@ func PollHandle(app *App) func(c echo.Context) error {
 
 		// Handle different responses from pollHandler
 		if value == "Account registered" {
-			// Save the browser cookies
-			return c.Redirect(http.StatusSeeOther, app.FrontEndURL)
+			// get some data from result, like Proof.
+			generatedProof := result.Proof
+			return c.Render(http.StatusOK, "registration-success", RegistrationInfo{
+				// Build the nessecary data for the template
+				App:            app,
+				User:           user,
+				SuccessMessage: lastSuccessMessage(&c),
+				WarningMessage: lastWarningMessage(&c),
+				ErrorMessage:   lastErrorMessage(&c),
+				Username:       username,
+				Proof:          generatedProof,
+				URL:            c.Request().URL.RequestURI(),
+				InviteCode:     invitecode,
+			})
+
 		} else if value == "Invalid ownership" {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid ownership"})
 		}
 
 		// Default response
 		return c.JSON(http.StatusOK, map[string]string{"message": "Request processed"})
-	}
+	})
 }
 
 // POST /register
