@@ -53,14 +53,14 @@ func SessionJoinServer(app *App) func(c echo.Context) error {
 
 		// If any parameters are missing, return NO
 		if username == "" || sessionID == "" || serverID == "" {
-			return c.String(http.StatusOK, "NO")
+			return c.String(http.StatusOK, "Bad login")
 		}
 
 		// Parse sessionId. It has the form:
 		// token:<accessToken>:<player UUID>
 		split := strings.Split(sessionID, ":")
 		if len(split) != 3 || split[0] != "token" {
-			return c.String(http.StatusOK, "NO")
+			return c.String(http.StatusOK, "Bad login")
 		}
 		accessToken := split[1]
 		id := split[2]
@@ -68,22 +68,23 @@ func SessionJoinServer(app *App) func(c echo.Context) error {
 		// Is the accessToken valid?
 		client := app.GetClient(accessToken, StalePolicyDeny)
 		if client == nil {
-			return c.String(http.StatusOK, "Invalid access token. Try restarting the game.")
+			return c.String(http.StatusOK, "Bad login")
 		}
 
 		// If the player name corresponding to the access token doesn't match
-		// the `user` param from the request, return an error message to the player.
+		// the `user` param from the request, return NO
 		user := client.User
 		if user.PlayerName != username {
-			return c.String(http.StatusOK, "Username doesn't match. Try restarting the game or report to the admin.")
+			return c.String(http.StatusOK, "Bad login")
 		}
-		// If the player's UUID doesn't match the UUID in the sessionId, return an error message to the player.
+		// If the player's UUID doesn't match the UUID in the sessionId, return
+		// NO
 		userID, err := UUIDToID(user.UUID)
 		if err != nil {
 			return err
 		}
 		if userID != id {
-			return c.String(http.StatusOK, "Invalid UUID. Try to reconnect, restart the game or report to the admin.")
+			return c.String(http.StatusOK, "Bad login")
 		}
 
 		user.ServerID = MakeNullString(&serverID)
@@ -134,25 +135,9 @@ func (app *App) hasJoined(c *echo.Context, playerName string, serverID string, l
 				log.Println(err)
 				continue
 			}
-
-			if legacy {
-				// Replace string sessionserver.mojang.com with session.minecraft.net in the URL
-				if strings.Contains(base.Host, "sessionserver.mojang.com") {
-					base.Host = strings.ReplaceAll(base.Host, "sessionserver.mojang.com", "session.minecraft.net")
-				}
-			}
-
-			if legacy {
-				base.Path += "/game/checkserver.jsp"
-			} else {
-				base.Path += "/session/minecraft/hasJoined"
-			}
+			base.Path += "/session/minecraft/hasJoined"
 			params := url.Values{}
-			if legacy {
-				params.Add("user", playerName)
-			} else {
-				params.Add("username", playerName)
-			}
+			params.Add("username", playerName)
 			params.Add("serverId", serverID)
 			base.RawQuery = params.Encode()
 
@@ -173,7 +158,7 @@ func (app *App) hasJoined(c *echo.Context, playerName string, serverID string, l
 		}
 
 		if legacy {
-			return (*c).String(http.StatusOK, "NO")
+			return (*c).String(http.StatusMethodNotAllowed, "NO")
 		} else {
 			return (*c).NoContent(http.StatusForbidden)
 		}
@@ -204,7 +189,7 @@ func SessionHasJoined(app *App) func(c echo.Context) error {
 // /game/checkserver.jsp
 func SessionCheckServer(app *App) func(c echo.Context) error {
 	return func(c echo.Context) error {
-		playerName := c.QueryParam("username")
+		playerName := c.QueryParam("user")
 		serverID := c.QueryParam("serverId")
 		return app.hasJoined(&c, playerName, serverID, true)
 	}
