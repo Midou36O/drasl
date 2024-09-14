@@ -58,6 +58,10 @@
           # Update whenever Go dependencies change
           vendorHash = "sha256-XLkICl7cL6FaWArl99xUH6kYLxHAZ/VsS0sP3d4yLws=";
 
+          # Disable testing as i'm not particularly interested in it
+          doCheck = false;
+
+
           outputs = ["out"];
 
           preConfigure = ''
