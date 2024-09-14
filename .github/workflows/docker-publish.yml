@@ -15,7 +15,7 @@ jobs:
       - name: Set up Nix
         uses: cachix/install-nix-action@v20
         with:
-          github_access_token: ${{ secrets.YOUR_TOKEN }}
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
           extra_nix_config: |
             extra-platforms = aarch64-linux
 
@@ -32,7 +32,7 @@ jobs:
 
       - name: Log in to GitHub Container Registry
         env:
-          GHCR_TOKEN: ${{ secrets.YOUR_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: echo "$GHCR_TOKEN" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
       - name: Push Docker Image to GHCR
