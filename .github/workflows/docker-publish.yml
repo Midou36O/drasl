@@ -5,10 +5,6 @@ on:
     branches:
       - "*"
 
-permissions: # For some reason github refuses to accept that automatically
-  packages: write
-  contents: read
-
 jobs:
   build_and_publish:
     name: Build and Publish OCI Image
@@ -36,7 +32,7 @@ jobs:
 
       - name: Log in to GitHub Container Registry
         env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: echo "$GHCR_TOKEN" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
       - name: Push Docker Image to GHCR
