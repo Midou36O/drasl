@@ -5,6 +5,10 @@ on:
     branches:
       - "*"
 
+permissions: # For some reason github refuses to accept that automatically
+  packages: write
+  contents: read
+
 jobs:
   build_and_publish:
     name: Build and Publish OCI Image
